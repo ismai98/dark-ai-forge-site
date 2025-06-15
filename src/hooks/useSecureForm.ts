@@ -1,6 +1,6 @@
 
 import { useState, useCallback } from 'react';
-import { sanitizeInput, validateEmail } from '@/lib/security';
+import { sanitizeInput, validateEmail, detectSqlInjection, validateLength } from '@/lib/security';
 
 interface FormData {
   [key: string]: any;
@@ -13,6 +13,8 @@ interface ValidationRules {
     minLength?: number;
     maxLength?: number;
     pattern?: RegExp;
+    url?: boolean;
+    noSqlInjection?: boolean;
   };
 }
 
@@ -28,30 +30,56 @@ export const useSecureForm = <T extends FormData>(
     const rules = validationRules[key];
     if (!rules) return null;
 
-    if (rules.required && (!value || value.toString().trim() === '')) {
+    const stringValue = value?.toString() || '';
+
+    // Required validation
+    if (rules.required && !stringValue.trim()) {
       return 'Dieses Feld ist erforderlich';
     }
 
-    if (value && rules.email && !validateEmail(value.toString())) {
+    // Skip other validations if field is empty and not required
+    if (!stringValue.trim() && !rules.required) {
+      return null;
+    }
+
+    // SQL injection detection
+    if (rules.noSqlInjection !== false && detectSqlInjection(stringValue)) {
+      return 'Ungültige Zeichen erkannt';
+    }
+
+    // Email validation
+    if (rules.email && !validateEmail(stringValue)) {
       return 'Ungültige E-Mail-Adresse';
     }
 
-    if (value && rules.minLength && value.toString().length < rules.minLength) {
+    // Length validation
+    if (rules.minLength && !validateLength(stringValue, rules.minLength, Infinity)) {
       return `Mindestens ${rules.minLength} Zeichen erforderlich`;
     }
 
-    if (value && rules.maxLength && value.toString().length > rules.maxLength) {
+    if (rules.maxLength && !validateLength(stringValue, 0, rules.maxLength)) {
       return `Maximal ${rules.maxLength} Zeichen erlaubt`;
     }
 
-    if (value && rules.pattern && !rules.pattern.test(value.toString())) {
+    // Pattern validation
+    if (rules.pattern && !rules.pattern.test(stringValue)) {
       return 'Ungültiges Format';
+    }
+
+    // URL validation
+    if (rules.url) {
+      try {
+        new URL(stringValue);
+      } catch {
+        return 'Ungültige URL';
+      }
     }
 
     return null;
   }, [validationRules]);
 
   const updateField = useCallback((key: keyof T, value: any) => {
+    // Sanitize string inputs
     const sanitized = typeof value === 'string' ? sanitizeInput(value) : value;
     
     setData(prev => ({
@@ -90,6 +118,25 @@ export const useSecureForm = <T extends FormData>(
     setIsSubmitting(false);
   }, [initialData]);
 
+  const secureSubmit = useCallback(async (
+    submitFn: (data: T) => Promise<void>
+  ) => {
+    if (!validateForm()) {
+      return false;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await submitFn(data);
+      return true;
+    } catch (error) {
+      console.error('Form submission error:', error);
+      return false;
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [data, validateForm]);
+
   return {
     data,
     errors,
@@ -97,6 +144,7 @@ export const useSecureForm = <T extends FormData>(
     setIsSubmitting,
     updateField,
     validateForm,
-    reset
+    reset,
+    secureSubmit
   };
 };

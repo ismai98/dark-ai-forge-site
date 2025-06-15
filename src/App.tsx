@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import ProtectedRoute from "@/components/ProtectedRoute";
 import Navigation from "./components/Navigation";
 import Index from "./pages/Index";
 import Projects from "./pages/Projects";
@@ -37,7 +38,11 @@ const App = () => (
           <BrowserRouter>
             <Routes>
               <Route path="/auth" element={<Auth />} />
-              <Route path="/admin-dashboard-secure" element={<AdminDashboard />} />
+              <Route path="/admin-dashboard-secure" element={
+                <ProtectedRoute requireAdmin={true}>
+                  <AdminDashboard />
+                </ProtectedRoute>
+              } />
               <Route path="/*" element={
                 <>
                   <Navigation />

@@ -8,13 +8,29 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, LogIn, Shield } from 'lucide-react';
+import { useSecureForm } from '@/hooks/useSecureForm';
 
 const Auth = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
   const { user, signIn } = useAuth();
+  const [error, setError] = useState('');
+
+  const { data, errors, isSubmitting, updateField, secureSubmit } = useSecureForm(
+    { email: '', password: '' },
+    {
+      email: { 
+        required: true, 
+        email: true, 
+        maxLength: 254,
+        noSqlInjection: true 
+      },
+      password: { 
+        required: true, 
+        minLength: 6, 
+        maxLength: 128,
+        noSqlInjection: true 
+      }
+    }
+  );
 
   if (user) {
     return <Navigate to="/admin-dashboard-secure" replace />;
@@ -22,18 +38,17 @@ const Auth = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setError('');
 
-    try {
-      const { error } = await signIn(email, password);
+    const success = await secureSubmit(async (formData) => {
+      const { error } = await signIn(formData.email, formData.password);
       if (error) {
-        setError('Ungültige Anmeldedaten oder Sie haben keine Admin-Berechtigung');
+        throw new Error('Ungültige Anmeldedaten oder Sie haben keine Admin-Berechtigung');
       }
-    } catch (err) {
+    });
+
+    if (!success) {
       setError('Ein unerwarteter Fehler ist aufgetreten');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -51,7 +66,7 @@ const Auth = () => {
               Admin Dashboard
             </CardTitle>
             <p className="text-gray-400 text-sm mt-2">
-              Melden Sie sich mit Ihren Admin-Zugangsdaten an
+              Sichere Anmeldung mit validierten Eingaben
             </p>
           </div>
         </CardHeader>
@@ -62,12 +77,17 @@ const Auth = () => {
               <Input
                 id="email"
                 type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                value={data.email}
+                onChange={(e) => updateField('email', e.target.value)}
                 required
                 className="bg-gray-800 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500"
                 placeholder="admin@beispiel.de"
+                autoComplete="email"
+                maxLength={254}
               />
+              {errors.email && (
+                <p className="text-red-400 text-xs mt-1">{errors.email}</p>
+              )}
             </div>
             
             <div>
@@ -75,12 +95,17 @@ const Auth = () => {
               <Input
                 id="password"
                 type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                value={data.password}
+                onChange={(e) => updateField('password', e.target.value)}
                 required
                 className="bg-gray-800 border-gray-700 text-white focus:border-blue-500 focus:ring-blue-500"
                 placeholder="••••••••"
+                autoComplete="current-password"
+                maxLength={128}
               />
+              {errors.password && (
+                <p className="text-red-400 text-xs mt-1">{errors.password}</p>
+              )}
             </div>
 
             {error && (
@@ -93,15 +118,15 @@ const Auth = () => {
 
             <Button
               type="submit"
-              disabled={loading}
+              disabled={isSubmitting}
               className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium"
             >
-              {loading ? (
+              {isSubmitting ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
                 <LogIn className="mr-2 h-4 w-4" />
               )}
-              Anmelden
+              Sicher anmelden
             </Button>
           </form>
 
